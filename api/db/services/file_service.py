@@ -48,21 +48,40 @@ class FileService(CommonService):
     @classmethod
     @DB.connection_context()
     def get_by_pf_id(cls, tenant_id, pf_id, page_number, items_per_page, orderby, desc, keywords):
-        # Get files by parent folder ID with pagination and filtering
-        # Args:
-        #     tenant_id: ID of the tenant
-        #     pf_id: Parent folder ID
-        #     page_number: Page number for pagination
-        #     items_per_page: Number of items per page
-        #     orderby: Field to order by
-        #     desc: Boolean indicating descending order
-        #     keywords: Search keywords
-        # Returns:
-        #     Tuple of (file_list, total_count)
+        """
+        获取父文件夹下的文件列表
+
+        Args:
+            tenant_id: 文件夹所有者的租户ID（由调用方传入，用于权限隔离）
+            pf_id: 父文件夹ID
+            page_number: 页码
+            items_per_page: 每页数量
+            orderby: 排序字段
+            desc: 是否降序
+            keywords: 搜索关键词
+
+        Returns:
+            (文件列表, 总数)
+
+        注意：
+        - 调用方（file_api_service.list_files）已在调用前完成权限检查
+        - tenant_id 参数是文件夹所有者的 tenant_id，用于查询该文件夹下的文件
+        - 这确保了团队共享场景：用户A的文件夹被共享给用户B，B进入该文件夹时，
+          查询使用A的tenant_id，能正确返回文件夹内的文件
+        """
         if keywords:
-            files = cls.model.select().where((cls.model.tenant_id == tenant_id), (cls.model.parent_id == pf_id), (fn.LOWER(cls.model.name).contains(keywords.lower())), ~(cls.model.id == pf_id))
+            files = cls.model.select().where(
+                (cls.model.tenant_id == tenant_id),
+                (cls.model.parent_id == pf_id),
+                (fn.LOWER(cls.model.name).contains(keywords.lower())),
+                ~(cls.model.id == pf_id)
+            )
         else:
-            files = cls.model.select().where((cls.model.tenant_id == tenant_id), (cls.model.parent_id == pf_id), ~(cls.model.id == pf_id))
+            files = cls.model.select().where(
+                (cls.model.tenant_id == tenant_id),
+                (cls.model.parent_id == pf_id),
+                ~(cls.model.id == pf_id)
+            )
         count = files.count()
         if desc:
             files = files.order_by(cls.model.getter_by(orderby).desc())
@@ -188,23 +207,24 @@ class FileService(CommonService):
 
     @classmethod
     @DB.connection_context()
-    def create_folder(cls, file, parent_id, name, count):
-        from api.apps import current_user
+    def create_folder(cls, file, parent_id, name, count, tenant_id=None):
         # Recursively create folder structure
         # Args:
         #     file: Current file object
         #     parent_id: Parent folder ID
         #     name: List of folder names to create
         #     count: Current depth in creation
+        #     tenant_id: Tenant ID for the created folders (defaults to current_user.id)
         # Returns:
         #     Created file object
         if count > len(name) - 2:
             return file
         else:
+            effective_tenant_id = tenant_id if tenant_id is not None else current_user.id
             file = cls.insert(
-                {"id": get_uuid(), "parent_id": parent_id, "tenant_id": current_user.id, "created_by": current_user.id, "name": name[count], "location": "", "size": 0, "type": FileType.FOLDER.value}
+                {"id": get_uuid(), "parent_id": parent_id, "tenant_id": effective_tenant_id, "created_by": effective_tenant_id, "name": name[count], "location": "", "size": 0, "type": FileType.FOLDER.value}
             )
-            return cls.create_folder(file, file.id, name, count + 1)
+            return cls.create_folder(file, file.id, name, count + 1, tenant_id=tenant_id)
 
     @classmethod
     @DB.connection_context()

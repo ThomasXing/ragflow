@@ -19,6 +19,7 @@ import { FilesTable } from './files-table';
 import { MoveDialog } from './move-dialog';
 import { useBulkOperateFile } from './use-bulk-operate-file';
 import { useHandleCreateFolder } from './use-create-folder';
+import { useCurrentFolderPermission } from './use-folder-permission';
 import { useHandleMoveFile } from './use-move-file';
 import { useSelectBreadcrumbItems } from './use-navigate-to-folder';
 import { useHandleUploadFile } from './use-upload-file';
@@ -75,6 +76,7 @@ export default function Files() {
   });
 
   const breadcrumbItems = useSelectBreadcrumbItems();
+  const { canUpload, canCreateFolder } = useCurrentFolderPermission();
 
   const leftPanel = (
     <div>
@@ -96,23 +98,29 @@ export default function Files() {
           showFilter={false}
           icon={'file'}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>
-                <LucidePlus />
-                {t('knowledgeDetails.addFile')}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56">
-              <DropdownMenuItem onClick={showFileUploadModal}>
-                {t('fileManager.uploadFile')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={showFolderCreateModal}>
-                {t('fileManager.newFolder')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {(canUpload || canCreateFolder) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <LucidePlus />
+                  {t('knowledgeDetails.addFile')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
+                {canUpload && (
+                  <DropdownMenuItem onClick={showFileUploadModal}>
+                    {t('fileManager.uploadFile')}
+                  </DropdownMenuItem>
+                )}
+                {canUpload && canCreateFolder && <DropdownMenuSeparator />}
+                {canCreateFolder && (
+                  <DropdownMenuItem onClick={showFolderCreateModal}>
+                    {t('fileManager.newFolder')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </ListFilterBar>
 
         {!rowSelectionIsEmpty && (

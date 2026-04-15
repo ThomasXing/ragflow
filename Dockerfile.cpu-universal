@@ -1,0 +1,190 @@
+# RAGFlow Linux CPU通用镜像
+# 适用于x86_64和arm64架构
+FROM ubuntu:24.04 AS base
+USER root
+SHELL ["/bin/bash", "-c"]
+
+ARG NEED_MIRROR=0
+WORKDIR /ragflow
+
+# 1. 下载所有依赖文件（不依赖外部镜像）
+RUN apt update && apt install -y wget curl unzip ca-certificates && \
+    # Tika服务器
+    wget -q https://repo.huaweicloud.com/repository/maven/org/apache/tika/tika-server-standard/3.2.3/tika-server-standard-3.2.3.jar && \
+    wget -q https://repo.huaweicloud.com/repository/maven/org/apache/tika/tika-server-standard/3.2.3/tika-server-standard-3.2.3.jar.md5 && \
+    # Chrome和Chromedriver
+    wget -q https://registry.npmmirror.com/-/binary/chrome-for-testing/121.0.6167.85/linux64/chrome-linux64.zip -O chrome-linux64-121-0-6167-85 && \
+    wget -q https://registry.npmmirror.com/-/binary/chrome-for-testing/121.0.6167.85/linux64/chromedriver-linux64.zip -O chromedriver-linux64-121-0-6167-85 && \
+    # OpenAI tokenizer文件
+    wget -q https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken -O 9b5ad71b2ce5302211f9c61530b329a4922fc6a4 && \
+    # 创建必要的目录
+    mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow /root/nltk_data
+
+ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard-3.2.3.jar"
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 2. 安装系统依赖
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    apt update && \
+    apt --no-install-recommends install -y ca-certificates && \
+    # 可选：使用国内镜像源
+    if [ "$NEED_MIRROR" = "1" ]; then \
+        sed -i 's|http://archive.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources && \
+        sed -i 's|http://security.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources; \
+    fi && \
+    # 配置APT缓存
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
+    chmod 1777 /tmp && \
+    # 更新并安装基础包
+    apt update && \
+    apt install -y \
+        build-essential \
+        libglib2.0-0 libglx-mesa0 libgl1 \
+        pkg-config libicu-dev libgdiplus \
+        default-jdk \
+        libatk-bridge2.0-0 \
+        libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev \
+        libjemalloc-dev \
+        gnupg unzip curl wget git vim less \
+        ghostscript \
+        pandoc \
+        texlive \
+        fonts-freefont-ttf fonts-noto-cjk \
+        postgresql-client \
+        libssl-dev  # 直接安装libssl-dev而不是特定版本
+
+# 3. 下载GitHub资源
+RUN mkdir -p /usr/share/infinity/resource && \
+    if [ "$NEED_MIRROR" = "1" ]; then \
+        git clone --depth 1 --single-branch https://gitee.com/infiniflow/resource /tmp/resource; \
+    else \
+        git clone --depth 1 --single-branch https://github.com/infiniflow/resource.git /tmp/resource; \
+    fi && \
+    cp -r /tmp/resource/* /usr/share/infinity/resource && \
+    rm -rf /tmp/resource
+
+# 4. 安装nginx
+ARG NGINX_VERSION=1.29.5-1~noble
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    mkdir -p /etc/apt/keyrings && \
+    curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /etc/apt/keyrings/nginx-archive-keyring.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/mainline/ubuntu/ noble nginx" > /etc/apt/sources.list.d/nginx.list && \
+    apt -o Acquire::Retries=5 update && \
+    apt -o Acquire::Retries=5 install -y nginx=${NGINX_VERSION} && \
+    apt-mark hold nginx
+
+# 5. 安装uv和Python 3.12
+RUN arch="$(uname -m)" && \
+    if [ "$arch" = "x86_64" ]; then uv_arch="x86_64"; else uv_arch="aarch64"; fi && \
+    wget -q "https://github.com/astral-sh/uv/releases/latest/download/uv-${uv_arch}-unknown-linux-gnu.tar.gz" -O uv.tar.gz && \
+    tar xzf uv.tar.gz && \
+    cp "uv-${uv_arch}-unknown-linux-gnu/"* /usr/local/bin/ && \
+    rm -rf "uv-${uv_arch}-unknown-linux-gnu" uv.tar.gz && \
+    uv python install 3.12
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
+    UV_HTTP_TIMEOUT=200 \
+    UV_HTTP_RETRIES=3 \
+    PATH=/root/.local/bin:$PATH
+
+# 6. 安装Node.js 20.x
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt purge -y nodejs npm && \
+    apt autoremove -y && \
+    apt update && \
+    apt install -y nodejs
+
+# 7. 安装Microsoft ODBC驱动
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt update && \
+    ACCEPT_EULA=Y apt install -y unixodbc-dev && \
+    arch="$(uname -m)" && \
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+        ACCEPT_EULA=Y apt install -y msodbcsql18; \
+    else \
+        ACCEPT_EULA=Y apt install -y msodbcsql17; \
+    fi || { echo "Failed to install ODBC driver"; exit 1; }
+
+# 8. 解压Chrome和Chromedriver
+RUN unzip chrome-linux64-121-0-6167-85 && \
+    mv chrome-linux64 /opt/chrome && \
+    ln -s /opt/chrome/chrome /usr/local/bin/ && \
+    unzip -j chromedriver-linux64-121-0-6167-85 chromedriver-linux64/chromedriver && \
+    mv chromedriver /usr/local/bin/ && \
+    rm -f /usr/bin/google-chrome
+
+# 9. builder阶段 - 安装Python依赖和构建前端
+FROM base AS builder
+USER root
+WORKDIR /ragflow
+
+# 安装Python依赖
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
+    if [ "$NEED_MIRROR" = "1" ]; then \
+        sed -i 's|pypi.org|mirrors.aliyun.com/pypi|g' uv.lock; \
+    else \
+        sed -i 's|mirrors.aliyun.com/pypi|pypi.org|g' uv.lock; \
+    fi && \
+    uv sync --python 3.12 --frozen && \
+    .venv/bin/python3 -m ensurepip --upgrade
+
+# 构建前端
+COPY web web
+COPY docs docs
+RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm,sharing=locked \
+    export NODE_OPTIONS="--max-old-space-size=4096" && \
+    cd web && npm install && npm run build
+
+# 设置版本信息
+RUN echo "ragflow-cpu-universal-$(date +%Y%m%d-%H%M%S)" > /ragflow/VERSION
+
+# 10. production阶段 - 最终镜像
+FROM base AS production
+USER root
+WORKDIR /ragflow
+
+# 复制Python环境
+ENV VIRTUAL_ENV=/ragflow/.venv
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+ENV PYTHONPATH=/ragflow/
+
+# 复制应用代码
+COPY web web
+COPY admin admin
+COPY api api
+COPY conf conf
+COPY deepdoc deepdoc
+COPY rag rag
+COPY agent agent
+COPY pyproject.toml uv.lock ./
+COPY mcp mcp
+COPY common common
+COPY memory memory
+COPY bin bin
+
+# 复制配置文件和脚本
+COPY docker/service_conf.yaml.template ./conf/service_conf.yaml.template
+COPY docker/entrypoint.sh ./
+RUN chmod +x ./entrypoint*.sh
+
+# 复制nginx配置
+COPY docker/nginx/ragflow.conf.golang docker/nginx/ragflow.conf.python docker/nginx/ragflow.conf.hybrid docker/nginx/nginx.conf docker/nginx/proxy.conf /etc/nginx/
+RUN mv /etc/nginx/ragflow.conf.golang /etc/nginx/conf.d/ragflow.conf.golang && \
+    mv /etc/nginx/ragflow.conf.python /etc/nginx/conf.d/ragflow.conf.python && \
+    mv /etc/nginx/ragflow.conf.hybrid /etc/nginx/conf.d/ragflow.conf.hybrid && \
+    rm -f /etc/nginx/sites-enabled/default
+
+# 复制构建的前端
+COPY --from=builder /ragflow/web/dist /ragflow/web/dist
+
+# 复制版本信息
+COPY --from=builder /ragflow/VERSION /ragflow/VERSION
+
+ENTRYPOINT ["./entrypoint.sh"]

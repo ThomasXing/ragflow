@@ -2,9 +2,16 @@ import {
   ConfirmDeleteDialog,
   ConfirmDeleteDialogNode,
 } from '@/components/confirm-delete-dialog';
+import { FileTeamShareToggle } from '@/components/file-team-share-toggle';
+import { FolderTeamShareToggle } from '@/components/folder-team-share-toggle';
 import { FileIcon } from '@/components/icon-font';
 import NewDocumentLink from '@/components/new-document-link';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useDownloadFile } from '@/hooks/use-file-request';
 import { IFile } from '@/interfaces/database/file-manager';
 import { cn } from '@/lib/utils';
@@ -20,9 +27,10 @@ import {
   FolderInput,
   FolderPen,
   Link2,
+  Share2,
   Trash2,
 } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   UseHandleConnectToKnowledgeReturnType,
   UseRenameCurrentFileReturnType,
@@ -52,6 +60,9 @@ export function ActionCell({
   const extension = getExtension(record.name);
   const isKnowledgeBase = isKnowledgeBaseType(record.source_type);
 
+  // Share popover state
+  const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+
   const handleShowConnectToKnowledgeModal = useCallback(() => {
     showConnectToKnowledgeModal(record);
   }, [record, showConnectToKnowledgeModal]);
@@ -78,120 +89,144 @@ export function ActionCell({
   }, [handleRemoveFile, documentId]);
 
   return (
-    <section className="flex gap-2 items-center text-text-sub-title-invert opacity-0 group-hover:opacity-100 transition-opacity">
-      {isKnowledgeBase || (
-        <Button
-          variant="transparent"
-          className="border-none hover:bg-bg-card text-text-primary"
-          size="icon-sm"
-          onClick={handleShowConnectToKnowledgeModal}
-        >
-          <Link2 />
-        </Button>
-      )}
-      {isKnowledgeBase || (
-        <Button
-          variant="transparent"
-          className="border-none hover:bg-bg-card text-text-primary"
-          size="icon-sm"
-          onClick={handleShowMoveFileModal}
-        >
-          <FolderInput />
-        </Button>
-      )}
-      {isKnowledgeBase || (
-        <Button
-          variant="transparent"
-          className="border-none hover:bg-bg-card text-text-primary"
-          size="icon-sm"
-          onClick={handleShowFileRenameModal}
-        >
-          <FolderPen />
-        </Button>
-      )}
-      {isFolder || (
-        <Button
-          variant="transparent"
-          className="border-none hover:bg-bg-card text-text-primary"
-          size="icon-sm"
-          onClick={onDownloadDocument}
-        >
-          <ArrowDownToLine />
-        </Button>
-      )}
-
-      {isSupportedPreviewDocumentType(extension) && (
-        <NewDocumentLink
-          documentId={documentId}
-          documentName={record.name}
-          resource="files"
-          className="text-text-sub-title-invert"
-        >
+    <>
+      <section className="flex gap-2 items-center text-text-sub-title-invert opacity-0 group-hover:opacity-100 transition-opacity">
+        {isKnowledgeBase || (
+          <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="transparent"
+                className="border-none hover:bg-bg-card text-text-primary"
+                size="icon-sm"
+                title={t('fileManager.share')}
+              >
+                <Share2 />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-80"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {isFolder ? (
+                <FolderTeamShareToggle
+                  folderId={documentId}
+                  folderName={name}
+                  isOwner={record.tenant_id === record.created_by}
+                  canManage={true}
+                  tenantId={record.tenant_id || ''}
+                  onStatusChange={() => {
+                    // Optionally refresh the file list after sharing status changes
+                  }}
+                />
+              ) : (
+                <FileTeamShareToggle
+                  fileId={documentId}
+                  fileName={name}
+                  isOwner={record.tenant_id === record.created_by}
+                  canManage={true}
+                  tenantId={record.tenant_id || ''}
+                  onStatusChange={() => {
+                    // Optionally refresh the file list after sharing status changes
+                  }}
+                />
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+        {isKnowledgeBase || (
           <Button
             variant="transparent"
             className="border-none hover:bg-bg-card text-text-primary"
             size="icon-sm"
+            onClick={handleShowConnectToKnowledgeModal}
           >
-            <Eye />
+            <Link2 />
           </Button>
-        </NewDocumentLink>
-      )}
-
-      {/* <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="transparent"
-        className="border-none" size={'sm'}>
-            <EllipsisVertical />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleShowMoveFileModal}>
-            {t('common.move')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleShowFileRenameModal}>
-            {t('common.rename')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {isFolder || (
-            <DropdownMenuItem onClick={onDownloadDocument}>
-              {t('common.download')}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu> */}
-      {isKnowledgeBase || (
-        <ConfirmDeleteDialog
-          onOk={onRemoveFile}
-          title={t('deleteModal.delFile')}
-          content={{
-            node: (
-              <ConfirmDeleteDialogNode>
-                <div className="flex items-center gap-2 text-text-secondary">
-                  <span className="size-4">
-                    <FileIcon name={name} type={type}></FileIcon>
-                  </span>
-                  <span
-                    className={cn('truncate text-xs', {
-                      ['cursor-pointer']: isFolder,
-                    })}
-                  >
-                    {name}
-                  </span>
-                </div>
-              </ConfirmDeleteDialogNode>
-            ),
-          }}
-        >
+        )}
+        {isKnowledgeBase || (
           <Button
             variant="transparent"
             className="border-none hover:bg-bg-card text-text-primary"
             size="icon-sm"
+            onClick={handleShowMoveFileModal}
           >
-            <Trash2 />
+            <FolderInput />
           </Button>
-        </ConfirmDeleteDialog>
-      )}
-    </section>
+        )}
+        {isKnowledgeBase || (
+          <Button
+            variant="transparent"
+            className="border-none hover:bg-bg-card text-text-primary"
+            size="icon-sm"
+            onClick={handleShowFileRenameModal}
+          >
+            <FolderPen />
+          </Button>
+        )}
+        {isFolder || (
+          <Button
+            variant="transparent"
+            className="border-none hover:bg-bg-card text-text-primary"
+            size="icon-sm"
+            onClick={onDownloadDocument}
+          >
+            <ArrowDownToLine />
+          </Button>
+        )}
+
+        {isSupportedPreviewDocumentType(extension) && (
+          <NewDocumentLink
+            documentId={documentId}
+            documentName={record.name}
+            resource="files"
+            className="text-text-sub-title-invert"
+          >
+            <Button
+              variant="transparent"
+              className="border-none hover:bg-bg-card text-text-primary"
+              size="icon-sm"
+            >
+              <Eye />
+            </Button>
+          </NewDocumentLink>
+        )}
+
+        {isKnowledgeBase || (
+          <ConfirmDeleteDialog
+            onOk={onRemoveFile}
+            title={t('deleteModal.delFile')}
+            content={{
+              node: (
+                <ConfirmDeleteDialogNode>
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <span className="size-4">
+                      <FileIcon name={name} type={type}></FileIcon>
+                    </span>
+                    <span
+                      className={cn('truncate text-xs', {
+                        ['cursor-pointer']: isFolder,
+                      })}
+                    >
+                      {name}
+                    </span>
+                  </div>
+                </ConfirmDeleteDialogNode>
+              ),
+            }}
+          >
+            <Button
+              variant="transparent"
+              className="border-none hover:bg-bg-card text-text-primary"
+              size="icon-sm"
+            >
+              <Trash2 />
+            </Button>
+          </ConfirmDeleteDialog>
+        )}
+      </section>
+    </>
   );
 }

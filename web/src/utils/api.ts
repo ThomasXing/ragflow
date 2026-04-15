@@ -175,6 +175,23 @@ export default {
   getFile: `${ExternalApi}${api_host}/files`,
   moveFile: `${ExternalApi}${api_host}/files/move`,
 
+  // file permission
+  createFileShare: `${api_host}/file_permission/share`,
+  listFileShares: `${api_host}/file_permission/list`,
+  updateFileShare: `${api_host}/file_permission/update`,
+  revokeFileShare: `${api_host}/file_permission/revoke`,
+  sharedWithMe: `${api_host}/file_permission/shared_with_me`,
+  sharedByMe: `${api_host}/file_permission/shared_by_me`,
+  batchFileShare: `${api_host}/file_permission/batch_share`,
+  checkFilePermission: `${api_host}/file_permission/check`,
+  shareableUsers: `${api_host}/file_permission/shareable_users`,
+
+  // team file permission
+  enableTeamShare: `${api_host}/file_permission/team/enable`,
+  disableTeamShare: `${api_host}/file_permission/team/disable`,
+  getTeamShareStatus: `${api_host}/file_permission/team/status`,
+  updateTeamPermissionLevel: `${api_host}/file_permission/team/level`,
+
   // system
   getSystemVersion: `${api_host}/system/version`,
   getSystemStatus: `${api_host}/system/status`,

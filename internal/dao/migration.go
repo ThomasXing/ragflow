@@ -33,6 +33,11 @@ func RunMigrations(db *gorm.DB) error {
 		return fmt.Errorf("failed to migrate tenant_llm primary key: %w", err)
 	}
 
+	// Create file_permission_share table
+	if err := createFilePermissionShareTable(db); err != nil {
+		return fmt.Errorf("failed to create file_permission_share table: %w", err)
+	}
+
 	// Rename columns (correct typos)
 	if err := renameColumnIfExists(db, "task", "process_duation", "process_duration"); err != nil {
 		return fmt.Errorf("failed to rename task.process_duation: %w", err)
@@ -192,7 +197,7 @@ func modifyColumnTypes(db *gorm.DB) error {
 	// Helper function to check if column exists
 	columnExists := func(table, column string) bool {
 		var count int64
-		db.Raw(`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+		db.Raw(`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
 			WHERE TABLE_NAME = ? AND COLUMN_NAME = ?`, table, column).Scan(&count)
 		return count > 0
 	}
@@ -254,6 +259,45 @@ func modifyColumnTypes(db *gorm.DB) error {
 		}
 	}
 
+	return nil
+}
+
+// createFilePermissionShareTable creates the file_permission_share table if it doesn't exist
+func createFilePermissionShareTable(db *gorm.DB) error {
+	// Check if table already exists
+	if db.Migrator().HasTable("file_permission_share") {
+		logger.Info("file_permission_share table already exists, skipping creation")
+		return nil
+	}
+
+	logger.Info("Creating file_permission_share table...")
+
+	// Create table
+	sql := `
+		CREATE TABLE IF NOT EXISTS file_permission_share (
+			id VARCHAR(32) NOT NULL PRIMARY KEY,
+			file_id VARCHAR(32) NOT NULL COMMENT '文件/文件夹ID',
+			target_user_id VARCHAR(32) NOT NULL COMMENT '被共享的用户ID',
+			sharer_id VARCHAR(32) NOT NULL COMMENT '共享者用户ID',
+			permission_level VARCHAR(16) NOT NULL DEFAULT 'view' COMMENT '权限级别：view/edit/admin',
+			tenant_id VARCHAR(32) NOT NULL COMMENT '租户ID',
+			created_at DATETIME NOT NULL COMMENT '创建时间',
+			expires_at DATETIME DEFAULT NULL COMMENT '过期时间',
+			status CHAR(1) NOT NULL DEFAULT '1' COMMENT '状态：1-有效，0-无效（已撤销）',
+			INDEX idx_file_permission_share_file_id (file_id),
+			INDEX idx_file_permission_share_target_user_id (target_user_id),
+			INDEX idx_file_permission_share_tenant_id (tenant_id),
+			INDEX idx_file_permission_share_status (status),
+			INDEX idx_file_permission_share_expires_at (expires_at),
+			UNIQUE INDEX uniq_file_permission_share_file_user_status (file_id, target_user_id, status)
+		) COMMENT='文件权限共享表'
+	`
+
+	if err := db.Exec(sql).Error; err != nil {
+		return fmt.Errorf("failed to create file_permission_share table: %w", err)
+	}
+
+	logger.Info("Successfully created file_permission_share table")
 	return nil
 }
 
