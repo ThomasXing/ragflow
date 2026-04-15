@@ -74,7 +74,11 @@ async def create_or_upload(tenant_id: str = None):
                 if file_obj.filename == '':
                     return get_error_argument_result("No file selected!")
 
-            success, result = await file_api_service.upload_file(tenant_id, pf_id, file_objs)
+            # Pass current_user.id as user_id so permission checks and
+            # created_by use the actual operator, not the decorator-injected tenant_id.
+            # This is critical for team sharing: tenant_id may differ from user_id.
+            from api.apps import current_user
+            success, result = await file_api_service.upload_file(tenant_id, pf_id, file_objs, user_id=current_user.id)
             if success:
                 return get_result(data=result)
             else:
@@ -84,8 +88,10 @@ async def create_or_upload(tenant_id: str = None):
             if err is not None:
                 return get_error_argument_result(err)
 
+            from api.apps import current_user
             success, result = await file_api_service.create_folder(
-                tenant_id, req["name"], req.get("parent_id"), req.get("type")
+                tenant_id, req["name"], req.get("parent_id"), req.get("type"),
+                user_id=current_user.id
             )
             if success:
                 return get_result(data=result)
@@ -136,12 +142,14 @@ def list_files(tenant_id: str = None):
       200:
         description: Successful operation.
     """
+    from api.apps import current_user
     args, err = validate_and_parse_request_args(request, ListFileReq)
     if err is not None:
         return get_error_argument_result(err)
 
     try:
-        success, result = file_api_service.list_files(tenant_id, args)
+        # Pass current_user.id as user_id so permission checks work correctly for team sharing
+        success, result = file_api_service.list_files(tenant_id, args, user_id=current_user.id)
         if success:
             return get_result(data=result)
         else:

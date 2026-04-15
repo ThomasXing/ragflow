@@ -43,6 +43,13 @@ The project uses **uv** for dependency management.
      ```bash
      docker compose -f docker/docker-compose-base.yml up -d
      ```
+   - **Local**:
+    ```bash
+    source .venv/bin/activate
+    export PYTHONPATH=$(pwd)
+    source docker/.env 2>/dev/null
+    uv run python api/ragflow_server.py --debug
+    ```
    - **Launch**:
      ```bash
      source .venv/bin/activate
@@ -61,6 +68,7 @@ Located in `web/`.
 
 2. **Run Dev Server**:
    ```bash
+   nvm use 25.8.1
    npm run dev
    ```
    Runs on port 8000 by default.
@@ -108,3 +116,10 @@ docker compose -f docker-compose.yml up -d
   pre-commit run --all-files
   ```
 
+- **Run MCP Server**:
+```
+source .venv/bin/activate
+export PYTHONPATH=$(pwd)
+uv run mcp/server/server.py --host=127.0.0.1 --port=9382 --base-url=http://127.0.0.1:9380 --api-key=huizai_sonli0abcdef1234567890abcdef
+
+```

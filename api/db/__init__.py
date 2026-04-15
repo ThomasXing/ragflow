@@ -30,6 +30,14 @@ class TenantPermission(StrEnum):
     TEAM = 'team'
 
 
+class FilePermissionLevel(StrEnum):
+    """文件权限级别枚举"""
+    VIEW = 'view'      # 仅查看权限
+    EDIT = 'edit'      # 编辑权限（可修改、上传、删除子文件）
+    ADMIN = 'admin'    # 管理权限（可重命名、移动、删除、设置权限）
+    OWNER = 'owner'    # 所有者权限（完整控制）
+
+
 class SerializedType(IntEnum):
     PICKLE = 1
     JSON = 2

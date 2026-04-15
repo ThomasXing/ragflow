@@ -1331,8 +1331,52 @@ class SystemSettings(DataBaseModel):
     source = CharField(max_length=32, null=False, index=False)
     data_type = CharField(max_length=32, null=False, index=False)
     value = TextField(null=False, help_text="Configuration value (JSON, string, etc.)")
+
     class Meta:
         db_table = "system_settings"
+
+
+class FilePermissionShare(DataBaseModel):
+    """文件/文件夹权限共享表"""
+    id = CharField(max_length=32, primary_key=True)
+    file_id = CharField(max_length=32, null=False, help_text="文件/文件夹ID", index=True)
+    target_user_id = CharField(max_length=32, null=False, help_text="被共享的用户ID", index=True)
+    sharer_id = CharField(max_length=32, null=False, help_text="共享者用户ID", index=True)
+    permission_level = CharField(max_length=16, null=False, default="view",
+                                help_text="权限级别：view/edit/admin", index=True)
+    tenant_id = CharField(max_length=32, null=False, help_text="租户ID", index=True)
+    created_at = DateTimeField(default=datetime.now, index=True)
+    expires_at = DateTimeField(null=True, index=True, help_text="权限过期时间")
+    status = CharField(max_length=1, null=False, default="1",
+                      help_text="状态：1-有效，0-无效（已撤销）", index=True)
+
+    class Meta:
+        db_table = "file_permission_share"
+        indexes = (
+            # 复合唯一索引，确保同一用户对同一文件只有一条有效共享记录
+            (("file_id", "target_user_id", "status"), True),
+        )
+
+
+class TeamPermissionShare(DataBaseModel):
+    """团队权限共享表"""
+    id = CharField(max_length=32, primary_key=True)
+    file_id = CharField(max_length=32, null=False, help_text="文件/文件夹ID", index=True)
+    tenant_id = CharField(max_length=32, null=False, help_text="租户ID", index=True)
+    permission_level = CharField(max_length=16, null=False, default="view",
+                                help_text="权限级别：view/edit/admin", index=True)
+    is_enabled = BooleanField(default=False, help_text="是否启用")
+    created_by = CharField(max_length=32, null=False, help_text="创建者用户ID")
+    created_at = DateTimeField(default=datetime.now, index=True)
+    updated_at = DateTimeField(default=datetime.now, index=True)
+
+    class Meta:
+        db_table = "team_permission_share"
+        indexes = (
+            # 同一租户内同一文件只能有一条团队共享记录
+            (("file_id", "tenant_id"), True),
+        )
+
 
 def alter_db_add_column(migrator, table_name, column_name, column_type):
     try:
@@ -1440,6 +1484,61 @@ def migrate_add_unique_email(migrator):
     except Exception as ex:
         logging.critical("Failed to add UNIQUE constraint on user.email: %s", ex)
 
+
+
+def create_file_permission_share_table(migrator):
+    """创建文件权限共享表"""
+    try:
+        # 创建表
+        DB.create_tables([FilePermissionShare])
+        logging.info("Successfully created file_permission_share table")
+
+        # 添加索引（除了复合唯一索引外，还需要单列索引）
+        try:
+            # 创建 file_id 索引（如果不存在）
+            migrate(migrator.add_index("file_permission_share", ("file_id",), unique=False))
+        except Exception as ex:
+            if "already exists" not in str(ex).lower() and "duplicate" not in str(ex).lower():
+                logging.warning(f"Failed to create file_id index on file_permission_share table: {ex}")
+
+        try:
+            # 创建 target_user_id 索引（如果不存在）
+            migrate(migrator.add_index("file_permission_share", ("target_user_id",), unique=False))
+        except Exception as ex:
+            if "already exists" not in str(ex).lower() and "duplicate" not in str(ex).lower():
+                logging.warning(f"Failed to create target_user_id index on file_permission_share table: {ex}")
+
+        try:
+            # 创建 tenant_id 索引（如果不存在）
+            migrate(migrator.add_index("file_permission_share", ("tenant_id",), unique=False))
+        except Exception as ex:
+            if "already exists" not in str(ex).lower() and "duplicate" not in str(ex).lower():
+                logging.warning(f"Failed to create tenant_id index on file_permission_share table: {ex}")
+
+        try:
+            # 创建复合唯一索引（file_id, target_user_id, status）
+            # 这个索引在模型的 Meta 类中定义，但需要确保数据库中存在
+            if settings.DATABASE_TYPE.upper() == "POSTGRES":
+                DB.execute_sql("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS file_permission_share_file_id_target_user_id_status
+                    ON file_permission_share(file_id, target_user_id, status)
+                    WHERE status = '1'
+                """)
+            else:
+                # MySQL/MariaDB
+                DB.execute_sql("""
+                    CREATE UNIQUE INDEX file_permission_share_file_id_target_user_id_status
+                    ON file_permission_share(file_id, target_user_id, status)
+                """)
+        except Exception as ex:
+            if "already exists" not in str(ex).lower() and "duplicate" not in str(ex).lower():
+                logging.warning(f"Failed to create unique index on file_permission_share table: {ex}")
+
+    except Exception as ex:
+        if "already exists" not in str(ex).lower() and "duplicate" not in str(ex).lower():
+            logging.warning(f"Failed to create file_permission_share table: {ex}")
+        else:
+            logging.info("file_permission_share table already exists")
 
 
 def update_tenant_llm_to_id_primary_key():
@@ -1648,6 +1747,8 @@ def migrate_db():
     alter_db_add_column(migrator, "memory", "tenant_llm_id", IntegerField(null=True, help_text="id in tenant_llm", index=True))
     alter_db_add_column(migrator, "user_canvas_version", "release", BooleanField(null=False, help_text="is released", default=False, index=True))
     alter_db_add_column(migrator, "api_4_conversation", "version_title", CharField(max_length=255, null=True, help_text="canvas version title when session created", index=False))
+    # 创建文件权限共享表
+    create_file_permission_share_table(migrator)
     logging.disable(logging.NOTSET)
     # this is after re-enabling logging to allow logging changed user emails
     migrate_add_unique_email(migrator)
