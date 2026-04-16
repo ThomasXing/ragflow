@@ -168,21 +168,21 @@ export default {
   moveFile: `${restAPIv1}/files/move`,
 
   // file permission
-  createFileShare: `${api_host}/file_permission/share`,
-  listFileShares: `${api_host}/file_permission/list`,
-  updateFileShare: `${api_host}/file_permission/update`,
-  revokeFileShare: `${api_host}/file_permission/revoke`,
-  sharedWithMe: `${api_host}/file_permission/shared_with_me`,
-  sharedByMe: `${api_host}/file_permission/shared_by_me`,
-  batchFileShare: `${api_host}/file_permission/batch_share`,
-  checkFilePermission: `${api_host}/file_permission/check`,
-  shareableUsers: `${api_host}/file_permission/shareable_users`,
+  createFileShare: `${restAPIv1}/file_permission/share`,
+  listFileShares: `${restAPIv1}/file_permission/list`,
+  updateFileShare: `${restAPIv1}/file_permission/update`,
+  revokeFileShare: `${restAPIv1}/file_permission/revoke`,
+  sharedWithMe: `${restAPIv1}/file_permission/shared_with_me`,
+  sharedByMe: `${restAPIv1}/file_permission/shared_by_me`,
+  batchFileShare: `${restAPIv1}/file_permission/batch_share`,
+  checkFilePermission: `${restAPIv1}/file_permission/check`,
+  shareableUsers: `${restAPIv1}/file_permission/shareable_users`,
 
   // team file permission
-  enableTeamShare: `${api_host}/file_permission/team/enable`,
-  disableTeamShare: `${api_host}/file_permission/team/disable`,
-  getTeamShareStatus: `${api_host}/file_permission/team/status`,
-  updateTeamPermissionLevel: `${api_host}/file_permission/team/level`,
+  enableTeamShare: `${restAPIv1}/file_permission/team/enable`,
+  disableTeamShare: `${restAPIv1}/file_permission/team/disable`,
+  getTeamShareStatus: `${restAPIv1}/file_permission/team/status`,
+  updateTeamPermissionLevel: `${restAPIv1}/file_permission/team/level`,
 
   // system
   getSystemVersion: `${restAPIv1}/system/version`,
