@@ -188,3 +188,220 @@ Update Todos
 后端集成：0.5天
 测试验证：0.5天
 总计：2天完成闭环
+
+
+
+
+端到端测试与部署计划（TDD 方法）
+端到端测试策略
+按照 TDD 原则，端到端测试应该在开发之前编写，定义完整的用户工作流。以下是需要创建的端到端测试：
+
+测试文件结构：
+
+
+test/e2e/
+├── admin-config-workflow.spec.ts    # 管理员配置工作流
+├── user-login-workflow.spec.ts      # 用户登录工作流  
+└── config-validation-workflow.spec.ts # 配置验证工作流
+测试场景1：管理员配置钉钉OAuth
+
+
+// test/e2e/admin-config-workflow.spec.ts
+test('admin configures dingtalk oauth and validates configuration', async ({ page }) => {
+  // 1. 管理员登录
+  // 2. 导航到系统配置页面
+  // 3. 填写钉钉OAuth配置
+  // 4. 点击验证按钮
+  // 5. 验证配置成功
+  // 6. 保存配置
+  // 7. 验证配置已保存
+});
+测试场景2：用户使用钉钉登录
+
+
+// test/e2e/user-login-workflow.spec.ts  
+test('user logs in with dingtalk oauth', async ({ page }) => {
+  // 1. 访问登录页面
+  // 2. 确认钉钉登录按钮可见
+  // 3. 点击钉钉登录按钮
+  // 4. 验证跳转到钉钉OAuth页面
+  // 5. 模拟OAuth回调
+  // 6. 验证登录成功
+});
+测试场景3：配置验证失败处理
+
+
+// test/e2e/config-validation-workflow.spec.ts
+test('admin sees error when configuring invalid dingtalk credentials', async ({ page }) => {
+  // 1. 管理员配置无效的钉钉凭证
+  // 2. 点击验证按钮
+  // 3. 验证显示错误信息
+  // 4. 配置不被保存
+});
+部署计划
+阶段部署策略：
+
+开发环境部署 - Day 1 完成
+
+后端配置格式转换功能
+前端页面框架
+基础API集成
+测试环境部署 - Day 2 完成
+
+完整的配置管理功能
+配置验证API
+前端表单验证
+预生产环境部署 - Day 3 完成
+
+登录页面集成
+端到端测试
+性能优化
+生产环境部署 - Day 4 完成
+
+监控告警集成
+文档更新
+运维手册
+端到端测试实现细节
+Playwright 测试配置：
+
+
+// playwright.config.ts
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './test/e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  },
+});
+测试环境准备脚本：
+
+
+#!/bin/bash
+# test/setup-e2e-env.sh
+
+# 启动依赖服务
+docker-compose -f docker/docker-compose-base.yml up -d
+
+# 等待服务就绪
+sleep 30
+
+# 初始化测试数据
+uv run python test/setup_test_data.py
+
+# 启动前端开发服务器
+cd web && npm run dev &
+FRONTEND_PID=$!
+
+# 启动后端服务
+source .venv/bin/activate
+export PYTHONPATH=$(pwd)
+bash docker/launch_backend_service.sh &
+BACKEND_PID=$!
+
+# 等待服务启动
+sleep 60
+
+# 运行端到端测试
+cd web && npx playwright test
+
+# 清理
+kill $FRONTEND_PID $BACKEND_PID
+监控与告警
+关键监控指标：
+
+配置变更频率 - Grafana 仪表盘
+配置验证成功率 - Prometheus 指标
+钉钉OAuth登录成功率 - 应用性能监控
+配置API响应时间 - 性能监控
+告警规则：
+
+
+# prometheus/alerts.yml
+- alert: ConfigValidationFailureRateHigh
+  expr: rate(config_validation_failures_total[5m]) > 0.1
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "配置验证失败率过高"
+    description: "过去5分钟内配置验证失败率超过10%"
+
+- alert: DingtalkOAuthLoginFailure
+  expr: rate(dingtalk_oauth_login_failures_total[10m]) > 0.05
+  for: 10m
+  labels:
+    severity: critical
+  annotations:
+    summary: "钉钉OAuth登录失败率过高"
+    description: "过去10分钟内钉钉登录失败率超过5%"
+回滚策略
+配置回滚机制：
+
+数据库层回滚 - 配置历史表支持版本回退
+API层回滚 - /api/v1/admin/config-rollback 端点
+前端回滚 - UI支持恢复到历史版本
+紧急回滚 - 手动修改配置文件并重启服务
+回滚流程：
+
+
+# 紧急回滚脚本
+#!/bin/bash
+# scripts/emergency-rollback.sh
+
+# 1. 停止服务
+docker-compose down
+
+# 2. 恢复配置文件
+cp backup/service_conf.yaml docker/service_conf.yaml.template
+
+# 3. 清除动态配置
+uv run python scripts/clear_dynamic_config.py
+
+# 4. 重启服务
+docker-compose up -d
+
+# 5. 验证回滚
+curl -f http://localhost:8000/health || exit 1
+文档与培训
+文档更新清单：
+
+ 管理员使用指南 - docs/administrator/admin/system_config.md
+ 开发人员API文档 - docs/api/admin-config-api.md
+ 运维手册 - docs/operations/config-management.md
+ 故障排除指南 - docs/troubleshooting/oauth-config.md
+培训材料：
+
+管理员培训 - 30分钟视频教程
+开发人员培训 - API使用示例
+运维团队培训 - 监控和告警配置
+验收标准清单
+功能验收：
+
+ 管理员能够通过UI配置钉钉OAuth
+ 管理员能够通过UI配置默认模型
+ 配置验证功能正常工作
+ 登录页面根据配置显示钉钉按钮
+ 配置变更无需重启服务
+性能验收：
+
+ 配置读取响应

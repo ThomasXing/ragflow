@@ -103,6 +103,10 @@ export default {
         'Sign up for free to explore top RAG technology. Create datasets and AIs to empower your business.',
       review: 'from 500+ reviews',
       seeAll: 'See all',
+      dingtalkLogin: 'Login with DingTalk',
+      loading: 'Loading...',
+      ssoLogin: 'SSO Login',
+      orContinueWith: 'Or continue with',
     },
     header: {
       knowledgeBase: 'Dataset',
@@ -2849,7 +2853,65 @@ Important structured information may include: names, dates, locations, events, k
       alive: 'Alive',
       timeout: 'Timeout',
       fail: 'Fail',
+
+      systemConfig: {
+        title: 'System Configuration',
+        description:
+          'Manage system-level configurations including OAuth authentication and default model settings',
+        configurationTitle: 'Configuration Management',
+        configurationDescription:
+          'Configure system behavior, changes take effect immediately',
+        dingtalkTab: 'DingTalk OAuth',
+        modelTab: 'Default Model',
+        dingtalkSectionTitle: 'DingTalk OAuth Settings',
+        dingtalkSectionDescription:
+          'Configure DingTalk OAuth authentication, users can log in with DingTalk accounts when enabled',
+        modelSectionTitle: 'Default Model Provider Settings',
+        modelSectionDescription:
+          'Configure default LLM model provider for newly created datasets',
+        saveButton: 'Save Configuration',
+        savingButton: 'Saving...',
+        validateButton: 'Validate Configuration',
+        validatingButton: 'Validating...',
+        note: 'Note: Configuration changes take effect immediately, no service restart required',
+
+        dingtalk: {
+          appKeyLabel: 'App Key',
+          appKeyPlaceholder: 'Enter DingTalk Open Platform App Key',
+          appKeyDescription:
+            'Obtained after creating an application in DingTalk Open Platform',
+          appSecretLabel: 'App Secret',
+          appSecretPlaceholder: 'Enter DingTalk Open Platform App Secret',
+          appSecretDescription: 'Paired with App Key, keep it secure',
+          redirectUriLabel: 'Redirect URI',
+          redirectUriPlaceholder: 'https://your-domain.com/oauth/callback',
+          redirectUriDescription:
+            'Callback address after DingTalk OAuth authentication',
+          enabledLabel: 'Enable DingTalk Login',
+          enabledDescription:
+            'When enabled, DingTalk login button will appear on login page',
+        },
+
+        model: {
+          providerLabel: 'Model Provider',
+          providerPlaceholder: 'Select model provider',
+          providerDescription: 'Choose default LLM model provider',
+          apiKeyLabel: 'API Key',
+          apiKeyPlaceholder: 'Enter model provider API Key',
+          apiKeyDescription: 'API key for the model provider',
+          baseUrlLabel: 'Base URL',
+          baseUrlPlaceholder: 'https://api.openai.com/v1',
+          baseUrlDescription: 'Base URL for API requests',
+          defaultModelLabel: 'Default Model',
+          defaultModelPlaceholder: 'e.g., gpt-4o-mini',
+          defaultModelDescription: 'Default model for new datasets',
+          enabledLabel: 'Enable Default Model',
+          enabledDescription:
+            'When enabled, new datasets will use this default model',
+        },
+      },
     },
+
     explore: {
       title: 'Launch',
       canvasList: 'Canvas List',

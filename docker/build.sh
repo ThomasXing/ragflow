@@ -1,0 +1,1 @@
+sudo docker build --platform linux/amd64 -f Dockerfile -t  infiniflow/ragflow:v0.24.4 . --build-arg NEED_MIRROR=1

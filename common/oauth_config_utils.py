@@ -16,7 +16,7 @@
 
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from api.db.services.system_settings_service import SystemSettingsService
 
@@ -25,6 +25,10 @@ def get_dynamic_oauth_config() -> Dict[str, Any]:
     """
     从数据库读取动态OAuth配置，合并静态配置
     返回格式与settings.OAUTH_CONFIG相同
+    支持多种配置格式：
+    1. 新格式：{"type": "oauth2", "client_id": "...", "client_secret": "...", "redirect_uri": "...", "enabled": True}
+    2. 钉钉格式：{"app_key": "...", "app_secret": "...", "redirect_uri": "...", "enabled": True}
+    3. 通用格式：{"type": "...", "client_id": "...", "client_secret": "...", "redirect_uri": "...", "enabled": True}
     """
     configs = {}
 
@@ -47,9 +51,10 @@ def get_dynamic_oauth_config() -> Dict[str, Any]:
                         config_data = json.loads(record.value)
                         # 检查是否启用（默认为True）
                         if config_data.get("enabled", True):
-                            # 确保有必要的字段
-                            if "type" in config_data and "client_id" in config_data and "client_secret" in config_data:
-                                configs[channel_name] = config_data
+                            # 标准化配置格式
+                            standardized_config = _standardize_oauth_config(channel_name, config_data)
+                            if standardized_config:
+                                configs[channel_name] = standardized_config
                                 logging.debug(f"Loaded dynamic OAuth config for {channel_name}")
                     except json.JSONDecodeError as e:
                         logging.error(f"Failed to parse OAuth config for {config_key}: {e}")
@@ -81,6 +86,66 @@ def get_combined_oauth_config() -> Dict[str, Any]:
     combined_config.update(dynamic_config)
 
     return combined_config
+
+
+def _standardize_oauth_config(channel_name: str, config_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    标准化OAuth配置格式，确保返回的配置包含type、client_id、client_secret等必需字段
+    支持多种输入格式：
+    1. 新格式：{"type": "oauth2", "client_id": "...", "client_secret": "...", "redirect_uri": "...", "enabled": True}
+    2. 钉钉格式：{"app_key": "...", "app_secret": "...", "redirect_uri": "...", "enabled": True}
+    3. 通用格式：{"type": "...", "client_id": "...", "client_secret": "...", "redirect_uri": "...", "enabled": True}
+
+    Returns:
+        标准化后的配置字典，如果配置无效则返回None
+    """
+    standardized = config_data.copy()
+
+    # 处理钉钉特定的字段映射
+    if channel_name == "dingtalk":
+        # 钉钉格式：app_key -> client_id, app_secret -> client_secret
+        if "app_key" in standardized and "client_id" not in standardized:
+            standardized["client_id"] = standardized.pop("app_key")
+        elif "app_key" in standardized and "client_id" in standardized:
+            # 两个字段都存在，优先使用client_id
+            pass
+
+        if "app_secret" in standardized and "client_secret" not in standardized:
+            standardized["client_secret"] = standardized.pop("app_secret")
+        elif "app_secret" in standardized and "client_secret" in standardized:
+            # 两个字段都存在，优先使用client_secret
+            pass
+
+    # 确保有type字段
+    if "type" not in standardized:
+        # 根据channel_name设置默认type
+        if channel_name in ["dingtalk", "github", "feishu"]:
+            standardized["type"] = "oauth2"
+        else:
+            standardized["type"] = "oauth2"
+
+    # 确保有必要的字段
+    required_fields = ["client_id", "client_secret"]
+    missing_fields = [field for field in required_fields if field not in standardized]
+
+    if missing_fields:
+        logging.warning(f"OAuth config for {channel_name} missing required fields: {missing_fields}")
+        return None
+
+    # 确保有display_name
+    if "display_name" not in standardized:
+        display_names = {
+            "dingtalk": "钉钉登录",
+            "github": "GitHub登录",
+            "feishu": "飞书登录"
+        }
+        standardized["display_name"] = display_names.get(channel_name, channel_name.title())
+
+    # 确保有icon
+    if "icon" not in standardized:
+        standardized["icon"] = "sso"
+
+    return standardized
 
 
 def refresh_oauth_config():

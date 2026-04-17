@@ -1,10 +1,9 @@
-import { type AxiosResponseHeaders } from 'axios';
-import { useContext, useEffect, useId } from 'react';
+import { useContext, useEffect, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -31,10 +30,11 @@ import { Routes } from '@/routes';
 import { rsaPsw } from '@/utils';
 import authorizationUtil from '@/utils/authorization-util';
 
-import { login } from '@/services/admin-service';
+import { getSystemConfig, login } from '@/services/admin-service';
 
 import ThemeSwitch from '../../components/theme-switch';
 import { BgSvg } from '../login-next/bg';
+import DingtalkLoginButton from './components/dingtalk-login-button';
 
 import { CurrentUserInfoContext } from './layouts/root-layout';
 
@@ -43,6 +43,34 @@ function AdminLogin() {
   const [, setCurrentUserInfo] = useContext(CurrentUserInfoContext);
   const { t } = useTranslation('translation', { keyPrefix: 'login' });
   const { isLogin } = useAuth();
+
+  // 查询钉钉OAuth配置
+  const { data: dingtalkConfig, isLoading: isLoadingConfig } = useQuery({
+    queryKey: ['dingtalkOAuthConfig'],
+    queryFn: async () => {
+      try {
+        const response = await getSystemConfig('dingtalk.oauth');
+        if (response?.data?.code === 0 && response.data.data?.value) {
+          return JSON.parse(response.data.data.value);
+        }
+        return null;
+      } catch (err) {
+        console.error('Failed to fetch dingtalk config:', err);
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5分钟
+    refetchOnWindowFocus: false,
+  });
+
+  // 钉钉OAuth是否启用
+  const isDingtalkEnabled =
+    !isLoadingConfig &&
+    dingtalkConfig?.enabled === true &&
+    (dingtalkConfig?.app_key || dingtalkConfig?.client_id);
+
+  // 钉钉登录状态
+  const [isDingtalkLoggingIn, setIsDingtalkLoggingIn] = useState(false);
 
   const loginMutation = useMutation({
     mutationKey: ['adminLogin'],
@@ -93,6 +121,26 @@ function AdminLogin() {
       navigate(Routes.AdminServices);
     }
   }, [isLogin, navigate]);
+
+  // 处理钉钉登录
+  const handleDingtalkLogin = () => {
+    if (!isDingtalkEnabled || isDingtalkLoggingIn) {
+      return;
+    }
+
+    setIsDingtalkLoggingIn(true);
+
+    // TODO: 实现钉钉OAuth跳转逻辑
+    // 这里应该跳转到钉钉OAuth授权页面
+    console.log('Starting DingTalk OAuth flow', dingtalkConfig);
+
+    // 模拟跳转延迟
+    setTimeout(() => {
+      setIsDingtalkLoggingIn(false);
+      // 在实际实现中，这里应该是 window.location.href = dingtalkOAuthUrl;
+      alert('钉钉OAuth功能待实现：跳转到钉钉授权页面');
+    }, 1000);
+  };
 
   const FormSchema = z.object({
     email: z
@@ -230,17 +278,41 @@ function AdminLogin() {
               </CardContent>
 
               <CardFooter className="px-10 pt-8 pb-14">
-                <Button
-                  form={formId}
-                  variant="highlighted"
-                  size="lg"
-                  block
-                  type="submit"
-                  className="font-medium"
-                  loading={loading}
-                >
-                  {t('login')}
-                </Button>
+                <div className="w-full space-y-4">
+                  {/* 普通登录按钮 */}
+                  <Button
+                    form={formId}
+                    variant="highlighted"
+                    size="lg"
+                    block
+                    type="submit"
+                    className="font-medium"
+                    loading={loading}
+                  >
+                    {t('login')}
+                  </Button>
+
+                  {/* 钉钉登录按钮（仅在配置启用时显示） */}
+                  <DingtalkLoginButton
+                    visible={isDingtalkEnabled}
+                    onClick={handleDingtalkLogin}
+                    loading={isDingtalkLoggingIn}
+                  />
+
+                  {/* 分隔线（当有SSO登录时显示） */}
+                  {isDingtalkEnabled && (
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-border"></div>
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-bg-component px-2 text-text-secondary">
+                          {t('orContinueWith')}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardFooter>
             </Card>
 

@@ -318,3 +318,10 @@ export const testSandboxConnection = (params: {
     provider_type: params.providerType,
     config: params.config,
   });
+
+export const getSystemConfig = (configKey?: string) => {
+  const url = configKey
+    ? `${api.getSystemConfig}?key=${encodeURIComponent(configKey)}`
+    : api.getSystemConfig;
+  return request.get<ResponseData<{ value: string }>>(url);
+};

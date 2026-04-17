@@ -260,18 +260,18 @@ def init_settings():
     OAUTH_CONFIG = get_base_config("oauth", {})
 
     def get_oauth_config():
-    """获取合并后的OAuth配置（静态+动态）"""
-    try:
-        # 尝试导入动态配置工具
-        from common.oauth_config_utils import get_combined_oauth_config
-        return get_combined_oauth_config()
-    except ImportError:
-        # 如果导入失败，返回静态配置
-        return OAUTH_CONFIG
-    except Exception as e:
-        # 其他错误也返回静态配置
-        logging.getLogger(__name__).warning(f"Failed to load dynamic OAuth config: {e}")
-        return OAUTH_CONFIG
+        """获取合并后的OAuth配置（静态+动态）"""
+        try:
+            # 尝试导入动态配置工具
+            from common.oauth_config_utils import get_combined_oauth_config
+            return get_combined_oauth_config()
+        except ImportError:
+            # 如果导入失败，返回静态配置
+            return OAUTH_CONFIG
+        except Exception as e:
+            # 其他错误也返回静态配置
+            logging.getLogger(__name__).warning(f"Failed to load dynamic OAuth config: {e}")
+            return OAUTH_CONFIG
     DOC_ENGINE_INFINITY = (DOC_ENGINE.lower() == "infinity")
     DOC_ENGINE_OCEANBASE = (DOC_ENGINE.lower() == "oceanbase")
     lower_case_doc_engine = DOC_ENGINE.lower()
