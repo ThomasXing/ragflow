@@ -41,7 +41,11 @@ class ESConnectionBase(DocStoreConnection):
         self.logger = logging.getLogger(logger_name)
 
         self.info = {}
-        self.logger.info(f"Use Elasticsearch {settings.ES['hosts']} as the doc engine.")
+        # Use get_base_config instead of settings.ES to avoid timing issues
+        from common.config_utils import get_base_config
+        es_config = get_base_config("es", {})
+        es_hosts = es_config.get("hosts", "unknown")
+        self.logger.info(f"Use Elasticsearch {es_hosts} as the doc engine.")
         self.es = ES_CONN.get_conn()
         fp_mapping = os.path.join(get_project_base_directory(), "conf", mapping_file_name)
         if not os.path.exists(fp_mapping):
@@ -50,7 +54,7 @@ class ESConnectionBase(DocStoreConnection):
             raise Exception(msg)
         with open(fp_mapping, "r") as f:
             self.mapping = json.load(f)
-        self.logger.info(f"Elasticsearch {settings.ES['hosts']} is healthy.")
+        self.logger.info(f"Elasticsearch {es_hosts} is healthy.")
 
     def _connect(self):
         from common.doc_store.es_conn_pool import ES_CONN

@@ -27,10 +27,12 @@ ATTEMPT_TIME = 2
 class ElasticSearchConnectionPool:
 
     def __init__(self):
-        if hasattr(settings, "ES"):
-            self.ES_CONFIG = settings.ES
-        else:
-            self.ES_CONFIG = settings.get_base_config("es", {})
+        # Always use get_base_config to get ES configuration
+        self.ES_CONFIG = settings.get_base_config("es", {})
+
+        # Validate configuration
+        if not self.ES_CONFIG or "hosts" not in self.ES_CONFIG:
+            raise ValueError(f"Invalid ES configuration: {self.ES_CONFIG}. Please check conf/service_conf.yaml")
 
         for _ in range(ATTEMPT_TIME):
             try:
