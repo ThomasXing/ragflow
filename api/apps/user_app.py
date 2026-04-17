@@ -146,8 +146,17 @@ async def get_login_channels():
     Get all supported authentication channels.
     """
     try:
+        from common.oauth_config_utils import get_combined_oauth_config
+
+        # 使用合并的OAuth配置（静态 + 动态）
+        oauth_config = get_combined_oauth_config()
+
         channels = []
-        for channel, config in settings.OAUTH_CONFIG.items():
+        for channel, config in oauth_config.items():
+            # 检查配置是否启用（默认为True）
+            if not config.get("enabled", True):
+                continue
+
             channels.append(
                 {
                     "channel": channel,
@@ -163,7 +172,11 @@ async def get_login_channels():
 
 @manager.route("/login/<channel>", methods=["GET"])  # noqa: F821
 async def oauth_login(channel):
-    channel_config = settings.OAUTH_CONFIG.get(channel)
+    from common.oauth_config_utils import get_combined_oauth_config
+
+    # 使用合并的OAuth配置
+    oauth_config = get_combined_oauth_config()
+    channel_config = oauth_config.get(channel)
     if not channel_config:
         raise ValueError(f"Invalid channel name: {channel}")
     auth_cli = get_auth_client(channel_config)
@@ -180,7 +193,11 @@ async def oauth_callback(channel):
     Handle the OAuth/OIDC callback for various channels dynamically.
     """
     try:
-        channel_config = settings.OAUTH_CONFIG.get(channel)
+        from common.oauth_config_utils import get_combined_oauth_config
+
+        # 使用合并的OAuth配置
+        oauth_config = get_combined_oauth_config()
+        channel_config = oauth_config.get(channel)
         if not channel_config:
             raise ValueError(f"Invalid channel name: {channel}")
         auth_cli = get_auth_client(channel_config)

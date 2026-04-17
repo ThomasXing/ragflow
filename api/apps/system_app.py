@@ -29,6 +29,7 @@ from timeit import default_timer as timer
 from rag.utils.redis_conn import REDIS_CONN
 from api.utils.health_utils import get_oceanbase_status
 from common import settings
+from common.versions import get_ragflow_version
 
 @manager.route("/status", methods=["GET"])  # noqa: F821
 @login_required
@@ -195,3 +196,25 @@ def get_config():
         "registerEnabled": settings.REGISTER_ENABLED,
         "disablePasswordLogin": settings.DISABLE_PASSWORD_LOGIN,
     })
+
+@manager.route("/version", methods=["GET"])  # noqa: F821
+@login_required
+def version():
+    """
+    Get the current version of the application.
+    ---
+    tags:
+      - System
+    security:
+      - ApiKeyAuth: []
+    responses:
+      200:
+        description: Version retrieved successfully.
+        schema:
+          type: object
+          properties:
+            version:
+              type: string
+              description: Version number.
+    """
+    return get_json_result(data=get_ragflow_version())

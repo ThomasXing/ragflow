@@ -351,16 +351,37 @@ class FileService(CommonService):
         #     start_id: Starting file ID
         # Returns:
         #     List of parent folder objects
+
         parent_folders = []
         current_id = start_id
-        while current_id:
-            e, file = cls.get_by_id(current_id)
-            if e and file.parent_id != file.id:
-                parent_folders.append(file)
-                current_id = file.parent_id
-            else:
-                parent_folders.append(file)
+        visited = set()
+        max_depth = 100  # Prevent infinite loops due to circular references
+
+        depth = 0
+        while current_id and depth < max_depth:
+            # Prevent infinite loop due to circular parent references
+            if current_id in visited:
+                logging.warning(f"Circular reference detected in file parent chain: {current_id} already visited")
                 break
+            visited.add(current_id)
+
+            e, file = cls.get_by_id(current_id)
+            if not e:
+                logging.error(f"File not found: {current_id}")
+                break
+
+            parent_folders.append(file)
+
+            # If parent points to itself or is None, we've reached the root
+            if not file.parent_id or file.parent_id == file.id:
+                break
+
+            current_id = file.parent_id
+            depth += 1
+
+        if depth >= max_depth:
+            logging.error(f"Max depth ({max_depth}) exceeded while traversing parent chain for file {start_id}")
+
         return parent_folders
 
     @classmethod

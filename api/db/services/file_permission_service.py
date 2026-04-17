@@ -236,8 +236,18 @@ class FilePermissionService(CommonService):
         inherited_perms = []
         if e and file:
             parent_id = file.parent_id
+            visited = set()
+            max_depth = 100  # 防止循环引用导致的无限循环
+            depth = 0
+
             # 遍历所有父文件夹
-            while parent_id and parent_id != file_id:  # 根目录的 parent_id == id
+            while parent_id and parent_id != file_id and depth < max_depth:  # 根目录的 parent_id == id
+                # 防止循环引用
+                if parent_id in visited:
+                    logging.warning(f"Circular reference detected in permission inheritance chain: {parent_id} already visited")
+                    break
+                visited.add(parent_id)
+
                 parent_perm = cls.get_user_permission(parent_id, user_id)
                 if parent_perm:
                     inherited_perms.append(parent_perm)
@@ -245,6 +255,10 @@ class FilePermissionService(CommonService):
                 if not e or not parent:
                     break
                 parent_id = parent.parent_id
+                depth += 1
+
+            if depth >= max_depth:
+                logging.error(f"Max depth ({max_depth}) exceeded while traversing permission inheritance for file {file_id}")
 
         # Step 5: 合并权限，取最高级别
         all_perms = ([explicit_perm] if explicit_perm else []) + inherited_perms
